@@ -1,0 +1,326 @@
+<html><head>
+  <title>CLFS Login</title>
+  <style>
+    body {
+      margin: 0; padding: 0; font-family: Arial, sans-serif;
+      background: linear-gradient(to bottom right, #EBFFEB, #e0e0e0);
+      height: 95vh; display: flex; align-items: center; justify-content: center;
+    }
+    .main-container { display: flex; gap: 30px; }
+    .box {
+      background: #fffff0; border-radius: 12px;
+      padding: 25px 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+      text-align: center;
+    }
+    .login-box { width: 260px; }
+    .logo-img { height: 80px; border-radius: 10px; }
+    input, select { width: 90%; padding: 8px; margin: 6px 0; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+    button { width: 97%; padding: 9px; background: #4CAF50; color: white; font-size: 14px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; margin-top: 8px; }
+    button:hover { background: #3e9147; }
+    .logout-btn { width: auto; padding: 8px; background: #e74c3c; color: white; font-size: 14px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; margin-top: 8px; }
+    .logout-btn:hover { background: #c0392b; }
+    .error { color: red; font-size: 13px; margin-top: 10px; }
+    .admin-dashboard { text-align: left; margin-top: 10px; }
+    .admin-dashboard h3 { margin-top: 0; margin-bottom: 10px; font-size: 16px; color: #333; }
+    .admin-dashboard input, .admin-dashboard select { width: 97%; padding: 6px; margin-top: 4px; border-radius: 5px; border: 1px solid #ccc; font-size: 13px; }
+    .admin-dashboard button { margin-top: 10px; width: auto; padding: 6px 14px; font-size: 13px; }
+    .subject-buttons { display: flex; justify-content: space-between; margin-top: 16px; gap: 6px; }
+    .subject-buttons button { flex: 1; padding: 6px; background-color: #4CAF50; color: white; font-size: 13px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer; max-width: 100%; }
+    .subject-buttons button:hover { background-color: #3e9147; }
+    .instructor-dropdown { margin-top: 10px; display: none; }
+    .instructor-dropdown ul { list-style: none; padding: 0; margin: 0; }
+    .instructor-dropdown li { padding: 6px; border-bottom: 1px solid #ddd; cursor: pointer; font-size: 13px; }
+    .instructor-dropdown li:hover { background-color: #eee; }
+    #instructorPopup { display: none; position: absolute; top: 22%; left: 50%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; padding: 14px 18px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000; text-align: center; min-width: 260px; }
+    #instructorPopup h4 { margin-top: 0; font-size: 15px; }
+    #instructorPopup button { margin: 6px 4px 0; font-size: 13px; width: auto; padding: 6px 12px; }
+    @media screen and (max-width: 600px) { .main-container { flex-direction: column; align-items: center; } .box { width: 90%; max-width: 300px; } }
+  </style>
+</head>
+<body>
+  <!-- LOGIN VIEW -->
+  <div class="main-container" id="loginView" style="display: none;">
+    <div class="box login-box">
+      <img src="clfsasu1.png" alt="CLFS Logo" class="logo-img">
+      <h2 style="font-size: 18px;">Sign In</h2>
+      <form onsubmit="event.preventDefault(); login();" autocomplete="on">
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <div style="text-align:left;margin-left:5%;">
+          <input type="checkbox" id="rememberPassword"> Remember Password
+        </div>
+        <button type="submit">Login</button>
+      </form>
+      <div class="error" id="errorMsg"></div>
+    </div>
+  </div>
+
+  <!-- COURSES / ADMIN VIEW -->
+  <div class="main-container" id="coursesView" style="display: flex;">
+    <div class="box" style="min-width: 280px; max-width: 400px; padding: 20px 18px;">
+      <img src="clfsasu1.png" alt="CLFS Logo" class="logo-img" style="margin-bottom: 15px;">
+      <div id="welcomeContainer" style="text-align: center;">
+        <div style="font-size:17px;margin-bottom:10px;">
+          <span style="color:green;font-weight:bold;">Welcome:</span>
+          <strong style="color:#0000FF;">Administrator</strong>
+        </div>
+        <button onclick="saveToHTML()">Save to List</button>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+      </div>
+
+      <!-- ADMIN DASHBOARD -->
+      <div id="adminDashboard" class="admin-dashboard" style="display: block;">
+        <h3>Admin Dashboard</h3>
+        <label>Full Name:</label>
+        <input type="text" id="newInstructorFullName">
+        <label>Username (email):</label>
+        <input type="text" id="newInstructorUsername">
+        <label>Password:</label>
+        <input type="password" id="newInstructorPassword">
+        <label>Subject:</label>
+        <select id="subjectSelect">
+          <option value="English">English</option>
+          <option value="Mathematics">Mathematics</option>
+          <option value="Information Technology">Information Technology</option>
+        </select>
+        <button onclick="addInstructor()">Add Instructor</button>
+
+        <div class="subject-buttons">
+          <button onclick="toggleDropdown('English')">English</button>
+          <button onclick="toggleDropdown('Mathematics')">Math</button>
+          <button onclick="toggleDropdown('Information Technology')">IT</button>
+        </div>
+
+        <div class="instructor-dropdown" id="dropdown-English" style="display: none;"><ul><li onclick="showInstructorPopup('E0788')">Mr. Aris Dahan</li><li onclick="showInstructorPopup('E0555')">Ashraft Tantish</li></ul></div>
+        <div class="instructor-dropdown" id="dropdown-Mathematics" style="display: block;"><ul><li onclick="showInstructorPopup('E0098')">Dr. Hameed Ur Rehman</li><li onclick="showInstructorPopup('E0535')">Mr. Badar Al Balsuhi</li><li onclick="showInstructorPopup('E0493')">Mr. Ibrahim Al Barwani</li><li onclick="showInstructorPopup('E05899')">Ms. Waad Al Kiyumi</li><li onclick="showInstructorPopup('E0545')">Mr. Khalfan Al Mamari</li></ul></div>
+        <div class="instructor-dropdown" id="dropdown-Information Technology" style="display: none;"><ul><li onclick="showInstructorPopup('E0795')">Dr. Mujahid Al Zakwani</li><li onclick="showInstructorPopup('E0590')">Mr. Nasser Al Dhawi</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP -->
+  <div id="instructorPopup" style="display: none;">
+        <h4>Mr. Khalfan Al Mamari (E0545)</h4>
+        <p style="margin-bottom:6px;">Subject: Mathematics</p>
+        
+        <button onclick="resetPasswordPrompt('E0545')">Reset</button>
+        <button onclick="deleteInstructor('E0545')">Delete</button>
+        <button onclick="closePopup()">Close</button>
+      </div>
+
+  <script>
+    let users = {};
+    const defaultUsers = {
+  "admin": {
+    "password": "adm25",
+    "role": "admin",
+    "approved": true,
+    "fullName": "Administrator"
+  },
+  "E0098": {
+    "password": "e98",
+    "role": "instructor",
+    "approved": true,
+    "subject": "Mathematics",
+    "fullName": "Dr. Hameed Ur Rehman Khan"
+  },
+  "E0795": {
+    "password": "e795",
+    "role": "instructor",
+    "approved": true,
+    "subject": "Information Technology",
+    "fullName": "Dr. Mujahid Al Zakwani"
+  },
+  "E0788": {
+    "password": "e788",
+    "role": "instructor",
+    "approved": true,
+    "subject": "English",
+    "fullName": "Mr. Aris Dahan"
+  },
+  "E0535": {
+    "password": "e535",
+    "role": "instructor",
+    "approved": true,
+    "subject": "Mathematics",
+    "fullName": "Mr. Badar Al Balsuhi"
+  },
+  "E0555": {
+    "password": "e555",
+    "role": "instructor",
+    "approved": true,
+    "subject": "English",
+    "fullName": "Ashraft Tantish"
+  },
+  "E0493": {
+    "password": "e493",
+    "role": "instructor",
+    "approved": true,
+    "subject": "Mathematics",
+    "fullName": "Mr. Ibrahim Al Barwani"
+  },
+  "E05899": {
+    "fullName": "Ms. Waad Al Kiyumi",
+    "password": "e5899",
+    "subject": "Mathematics",
+    "approved": true,
+    "role": "instructor"
+  },
+  "E0545": {
+    "fullName": "Mr. Khalfan Al Mamari",
+    "password": "e545",
+    "subject": "Mathematics",
+    "approved": true,
+    "role": "instructor"
+  },
+  "E0590": {
+    "fullName": "Mr. Nasser Al Dhawi",
+    "password": "e590",
+    "subject": "Information Technology",
+    "approved": true,
+    "role": "instructor"
+  }
+};
+
+    function loadUsers() {
+      const stored = localStorage.getItem("clfs_users");
+      users = stored ? JSON.parse(stored) : defaultUsers;
+    }
+    function saveUsers() { localStorage.setItem("clfs_users", JSON.stringify(users)); }
+
+    let currentUser = null;
+
+    window.onload = () => {
+      loadUsers();
+      const remembered = localStorage.getItem('rememberedCredentials');
+      if(remembered){
+        const creds = JSON.parse(remembered);
+        document.getElementById("username").value = creds.username;
+        document.getElementById("password").value = creds.password;
+        document.getElementById("rememberPassword").checked = true;
+      } else {
+        const lastUser = localStorage.getItem('lastUsername');
+        if(lastUser) document.getElementById("username").value = lastUser;
+      }
+      document.getElementById("loginView").style.display = "flex";
+      document.getElementById("coursesView").style.display = "none";
+      document.getElementById("adminDashboard").style.display = "none";
+      document.getElementById("welcomeContainer").innerHTML = "";
+    };
+
+    function login(){
+      const u = document.getElementById("username").value.trim();
+      const p = document.getElementById("password").value.trim();
+      const remember = document.getElementById("rememberPassword").checked;
+      const err = document.getElementById("errorMsg");
+
+      if(users[u] && users[u].password === p){
+        if(users[u].approved){
+          currentUser = { username:u, ...users[u] };
+          localStorage.setItem('currentUser', JSON.stringify(currentUser));
+          if(remember){
+            localStorage.setItem('rememberedCredentials', JSON.stringify({username:u,password:p}));
+          } else {
+            localStorage.removeItem('rememberedCredentials');
+            localStorage.setItem('lastUsername', u);
+          }
+
+          document.getElementById("loginView").style.display="none";
+          document.getElementById("coursesView").style.display="flex";
+          err.textContent="";
+          updateWelcomeAndDashboard();
+
+          if(currentUser.role==="instructor"){
+            const subjectPageMap = { "Mathematics":"GMS-Math.html", "Information Technology":"GMS-IT.html", "English":"GMS-English.html" };
+            const redirectPage = subjectPageMap[currentUser.subject];
+            if(redirectPage) window.location.href=`${redirectPage}?instructor=${encodeURIComponent(currentUser.fullName)}`;
+          }
+        } else { err.textContent="Your account is not approved yet."; }
+      } else { err.textContent="Invalid username or password."; }
+    }
+
+    function logout(){
+      if(currentUser && !document.getElementById("rememberPassword").checked){
+        localStorage.removeItem('rememberedCredentials');
+        localStorage.setItem('lastUsername', currentUser.username);
+      }
+      currentUser = null;
+      document.getElementById("password").value="";
+      document.getElementById("errorMsg").textContent="";
+      document.getElementById("loginView").style.display="flex";
+      document.getElementById("coursesView").style.display="none";
+      document.getElementById("welcomeContainer").innerHTML="";
+      document.getElementById("adminDashboard").style.display="none";
+      localStorage.removeItem('currentUser');
+    }
+
+    function updateWelcomeAndDashboard(){
+      document.getElementById("welcomeContainer").innerHTML = `
+        <div style="font-size:17px;margin-bottom:10px;">
+          <span style="color:green;font-weight:bold;">Welcome:</span>
+          <strong style="color:#0000FF;">${currentUser.fullName}</strong>
+        </div>
+        <button onclick="saveToHTML()">Save to List</button>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+      `;
+      if(currentUser.role==="admin") document.getElementById("adminDashboard").style.display="block";
+    }
+
+    function addInstructor() {
+      const fullName = document.getElementById("newInstructorFullName").value.trim();
+      const username = document.getElementById("newInstructorUsername").value.trim();
+      const password = document.getElementById("newInstructorPassword").value.trim();
+      const subject = document.getElementById("subjectSelect").value;
+      if (!fullName || !username || !password) return alert("Please fill in all fields.");
+      if (users[username]) return alert("Username already exists.");
+      users[username] = { fullName, password, subject, approved:false, role:"instructor" };
+      saveUsers();
+      document.getElementById("newInstructorFullName").value = "";
+      document.getElementById("newInstructorUsername").value = "";
+      document.getElementById("newInstructorPassword").value = "";
+      alert(`Instructor "${fullName}" added.`);
+    }
+
+    function toggleDropdown(subject) {
+      ["English","Mathematics","Information Technology"].forEach(s=>{
+        document.getElementById("dropdown-" + s).style.display=(s===subject)?"block":"none";
+      });
+      const container = document.getElementById("dropdown-" + subject);
+      const filtered = Object.entries(users).filter(([_, u])=>u.role==="instructor" && u.subject===subject);
+      container.innerHTML = `<ul>${filtered.map(([uname,info])=>`<li onclick="showInstructorPopup('${uname}')">${info.fullName}</li>`).join("")}</ul>`;
+    }
+
+    function showInstructorPopup(username) {
+      const u = users[username];
+      const popup = document.getElementById("instructorPopup");
+      popup.style.display = "block";
+      popup.innerHTML = `
+        <h4>${u.fullName} (${username})</h4>
+        <p style="margin-bottom:6px;">Subject: ${u.subject}</p>
+        ${!u.approved?`<button onclick="approveInstructor('${username}')">Approve</button>`:""}
+        <button onclick="resetPasswordPrompt('${username}')">Reset</button>
+        <button onclick="deleteInstructor('${username}')">Delete</button>
+        <button onclick="closePopup()">Close</button>
+      `;
+    }
+    function closePopup(){ document.getElementById("instructorPopup").style.display="none"; }
+    function approveInstructor(username){ users[username].approved=true; saveUsers(); closePopup(); alert("Instructor approved."); }
+    function deleteInstructor(username){ if(confirm("Are you sure you want to delete this instructor?")){ delete users[username]; saveUsers(); closePopup(); } }
+    function resetPasswordPrompt(username){ const newPass = prompt("Enter new password for "+users[username].fullName+":"); if(newPass){ users[username].password=newPass.trim(); saveUsers(); alert("Password updated successfully."); closePopup(); } }
+
+    let fileHandle;
+    async function saveToHTML() {
+      try {
+        if (!fileHandle) [fileHandle] = await window.showOpenFilePicker({ types:[{description:'HTML Files',accept:{'text/html':['.html']}}], multiple:false });
+        let htmlContent = document.documentElement.outerHTML;
+        htmlContent = htmlContent.replace(/const defaultUsers = {[\s\S]*?};/,`const defaultUsers = ${JSON.stringify(users,null,2)};`);
+        const writable = await fileHandle.createWritable();
+        await writable.write(htmlContent);
+        await writable.close();
+        alert("HTML file updated successfully.");
+      } catch(err){ console.error(err); alert("Failed to save HTML file."); }
+    }
+  </script>
+
+
+</body></html>
