@@ -1376,12 +1376,12 @@
 </tbody></table>
 
 <!-- ============================================
-     BUTTON BAR - All Actions (with Auto-Save Folder button added)
+     BUTTON BAR - All Actions (with Save to Folder button added)
      ============================================ -->
 <div class="button-box">
   <div>
-    <!-- NEW: Auto-Save Folder Selection Button -->
-    <button class="blue-button" onclick="selectFolder()" style="background-color: #9C27B0; color: white;" id="folderSelectBtn">📁 Select Folder for Auto-Save</button>
+    <!-- NEW: Save to Folder Button - Overwrites existing file -->
+    <button class="blue-button" onclick="saveToFolder()" style="background-color: #9C27B0; color: white;" id="saveToFolderBtn">💾 Save to Folder</button>
 
     <div class="dropdown" id="importButtonContainer">
       <div class="dropdown" id="importButtonContainer">
@@ -1587,7 +1587,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
 <!-- ============================================
-     APPLICATION LOGIC (original, with fixes and updates) + Auto-Save Folder Integration
+     APPLICATION LOGIC (original, with fixes and updates) + Save to Folder (Overwrite)
      ============================================ -->
 <script>
 // ============================================
@@ -1595,7 +1595,7 @@
 // Original Code - with fixes: PDF imports all names, JSON imports both names & grades, update URL updated, version system removed.
 // MERGED with Login.html defaultUsers and authentication logic
 // INCLUDES: Enhanced Statistics with Grade Distribution Graph, fixed semester, preloaded students
-// ADDED: Auto-save to folder functionality (integrated from the simpler GMS)
+// ADDED: Save to Folder functionality (single save, overwrites existing file)
 // ============================================
 
 // PDF Worker Configuration
@@ -1623,45 +1623,11 @@ const performanceAnalysisButton = document.getElementById('performanceAnalysisBu
 const resultsAnalysisButton = document.getElementById('resultsAnalysisButton');
 
 // ============================================
-// AUTO-SAVE FOLDER FUNCTIONALITY (integrated)
+// SAVE TO FOLDER FUNCTIONALITY (single save, overwrites existing file)
 // ============================================
-let folderHandle;
 
-// ==============================
-// Select folder for auto-save
-// ==============================
-async function selectFolder() {
-  try {
-    folderHandle = await window.showDirectoryPicker();
-    localStorage.setItem('gmsFolderSelected', 'yes');
-    localStorage.setItem('gmsFolderHandle', JSON.stringify({ 
-      // We can't store the actual handle, just a flag
-      selected: true,
-      timestamp: new Date().toISOString()
-    }));
-    
-    // Update button appearance
-    const folderBtn = document.getElementById('folderSelectBtn');
-    if (folderBtn) {
-      folderBtn.style.backgroundColor = '#4CAF50';
-      folderBtn.innerHTML = '✅ Folder Selected';
-      setTimeout(() => {
-        folderBtn.style.backgroundColor = '#9C27B0';
-        folderBtn.innerHTML = '📁 Change Auto-Save Folder';
-      }, 3000);
-    }
-    
-    alert("Folder selected! Auto-save will now work in this folder.");
-    
-    // Trigger an initial save to the folder
-    setTimeout(() => {
-      const data = tableToJSON();
-      saveGrades(data);
-    }, 1000);
-  } catch (err) {
-    console.error('Folder selection cancelled or failed:', err);
-  }
-}
+// Store the file handle for the selected file (to enable overwriting)
+let savedFileHandle = null;
 
 // ==============================
 // Helper: Convert table to JSON
@@ -1752,74 +1718,79 @@ function tableToJSON() {
 }
 
 // ==============================
-// Auto-save to JSON file in selected folder
+// Save to folder - overwrites existing file
 // ==============================
-async function saveGrades(data) {
-  if (!folderHandle) {
-    // Try to restore folder selection from localStorage flag
-    if (localStorage.getItem('gmsFolderSelected') === 'yes') {
-      // We need to re-prompt as we can't restore the handle
-      folderHandle = await window.showDirectoryPicker();
-      if (!folderHandle) return;
-    } else {
-      // Silent fail - don't alert, just return
-      return;
-    }
+async function saveToFolder() {
+  const data = tableToJSON();
+  
+  if (!data.students || data.students.length === 0) {
+    alert('No data to save.');
+    return;
   }
   
   try {
-    // Generate filename with timestamp and context
-    const timestamp = new Date();
-    const dateStr = timestamp.toISOString().split('T')[0];
-    const timeStr = timestamp.toTimeString().split(' ')[0].replace(/:/g, '-');
-    const courseCode = courseSelect.value;
-    const section = sectionSelect.value;
-    const view = currentView;
+    let fileHandle;
     
-    const fileName = `GMS_${courseCode}_Sec${section}_${view}_${dateStr}_${timeStr}.json`;
+    // If we already have a file handle, use it to overwrite
+    if (savedFileHandle) {
+      // Verify we still have permission
+      const permission = await savedFileHandle.queryPermission({ mode: 'readwrite' });
+      if (permission === 'granted') {
+        fileHandle = savedFileHandle;
+      } else {
+        // Request permission again
+        const newPermission = await savedFileHandle.requestPermission({ mode: 'readwrite' });
+        if (newPermission === 'granted') {
+          fileHandle = savedFileHandle;
+        } else {
+          // Permission denied, ask for new file
+          savedFileHandle = null;
+        }
+      }
+    }
     
-    const fileHandle = await folderHandle.getFileHandle(fileName, { create: true });
+    // If no valid file handle, ask user to select a file
+    if (!fileHandle) {
+      fileHandle = await window.showSaveFilePicker({
+        suggestedName: `GMS_${courseSelect.value}_Sec${sectionSelect.value}_${currentView}.json`,
+        types: [{
+          description: 'JSON Files',
+          accept: { 'application/json': ['.json'] }
+        }]
+      });
+      
+      // Save the handle for future overwrites
+      savedFileHandle = fileHandle;
+    }
+    
+    // Write the data (this will overwrite the existing file)
     const writable = await fileHandle.createWritable();
     await writable.write(JSON.stringify(data, null, 2));
     await writable.close();
     
-    // Show subtle success indicator
-    const folderBtn = document.getElementById('folderSelectBtn');
-    if (folderBtn) {
-      folderBtn.style.backgroundColor = '#4CAF50';
-      folderBtn.innerHTML = '✓ Auto-Saved';
+    // Show success message
+    const saveBtn = document.getElementById('saveToFolderBtn');
+    if (saveBtn) {
+      const originalText = saveBtn.innerHTML;
+      saveBtn.innerHTML = '✓ Saved!';
+      saveBtn.style.backgroundColor = '#4CAF50';
       setTimeout(() => {
-        folderBtn.style.backgroundColor = '#9C27B0';
-        folderBtn.innerHTML = '📁 Auto-Save Folder';
+        saveBtn.innerHTML = originalText;
+        saveBtn.style.backgroundColor = '#9C27B0';
       }, 2000);
     }
     
-    console.log(`Auto-saved to folder: ${fileName}`);
+    alert('✅ Grades saved successfully! The file has been updated.');
   } catch (err) {
-    console.error('Auto-save failed:', err);
-    // Show error on button
-    const folderBtn = document.getElementById('folderSelectBtn');
-    if (folderBtn) {
-      folderBtn.style.backgroundColor = '#e74c3c';
-      folderBtn.innerHTML = '✗ Save Failed';
-      setTimeout(() => {
-        folderBtn.style.backgroundColor = '#9C27B0';
-        folderBtn.innerHTML = '📁 Auto-Save Folder';
-      }, 3000);
+    if (err.name !== 'AbortError') {
+      console.error('Save failed:', err);
+      alert('❌ Failed to save: ' + err.message);
     }
   }
 }
 
 // ==============================
-// Save button clicked - triggers auto-save
-// ==============================
-function saveButtonClicked() {
-  const data = tableToJSON();
-  saveGrades(data);
-}
-
-// ==============================
-// Load from folder - manual import from selected folder
+// Load from folder
 // ==============================
 async function loadFromFolder() {
   try {
@@ -1834,6 +1805,9 @@ async function loadFromFolder() {
     const file = await fileHandle.getFile();
     const text = await file.text();
     const data = JSON.parse(text);
+    
+    // Save this handle for future saves (optional)
+    savedFileHandle = fileHandle;
     
     // Load data into table
     if (data.students && Array.isArray(data.students)) {
@@ -1915,11 +1889,30 @@ async function loadFromFolder() {
       
       noNamesMessage.style.display = 'none';
       calculateTotals();
-      showStatus('✅ Data loaded from folder successfully!', document.getElementById('folderSelectBtn'));
+      
+      // Show success message
+      alert('✅ Data loaded successfully from file!');
     }
   } catch (err) {
-    console.error('Error loading from folder:', err);
-    showStatus('❌ Failed to load from folder', document.getElementById('folderSelectBtn'));
+    if (err.name !== 'AbortError') {
+      console.error('Error loading from folder:', err);
+      alert('❌ Failed to load: ' + err.message);
+    }
+  }
+}
+
+// Add right-click to load
+function setupFolderButton() {
+  const folderBtn = document.getElementById('saveToFolderBtn');
+  if (folderBtn) {
+    // Add right-click context menu to load from folder
+    folderBtn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      loadFromFolder();
+    });
+    
+    // Add tooltip
+    folderBtn.title = "Left-click: Save to folder (overwrites last saved file)\nRight-click: Load from folder";
   }
 }
 
@@ -2585,12 +2578,6 @@ function saveToLocalStorage() {
     updateSectionDropdown();
 
     showStatus('✅ Data saved successfully!', document.querySelector('.green-button'));
-    
-    // Also trigger auto-save to folder if folder is selected
-    if (folderHandle || localStorage.getItem('gmsFolderSelected') === 'yes') {
-      const data = tableToJSON();
-      saveGrades(data);
-    }
   } catch (err) {
     console.error(err);
     showStatus('❌ Failed to save data', document.querySelector('.green-button'));
@@ -5379,21 +5366,8 @@ function getPerformanceAnalysis(student) {
 document.getElementById('xlsxFileInput').addEventListener('change', handleGradesFile);
 
 // ============================================
-// AUTO-SAVE FOLDER INTEGRATION - Add button to load from folder
+// SAVE TO FOLDER INTEGRATION - Setup button
 // ============================================
-function addFolderLoadButton() {
-  const folderBtn = document.getElementById('folderSelectBtn');
-  if (folderBtn) {
-    // Add right-click context menu to load from folder
-    folderBtn.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      loadFromFolder();
-    });
-    
-    // Add tooltip
-    folderBtn.title = "Left-click: Select folder for auto-save\nRight-click: Load grades from folder";
-  }
-}
 
 // ============================================
 // ORIGINAL INITIALIZATION - with version system removed
@@ -5470,8 +5444,8 @@ window.addEventListener('beforeunload', (e) => {
     } 
   });
   
-  // Initialize folder load button
-  addFolderLoadButton();
+  // Initialize folder button
+  setupFolderButton();
 });
 
 // Run initUpdateSystem at the end
