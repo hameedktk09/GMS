@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CLFS-GMS | Grade Management System</title>
   <style>
-    /* ALL ORIGINAL CSS STYLES REMAIN EXACTLY THE SAME (except version block removed) */
+    /* ALL ORIGINAL CSS STYLES REMAIN EXACTLY THE SAME */
     body {
       font-family: Times New Roman, Tahoma, Geneva, Verdana, sans-serif;
       font-size: 14px;
@@ -1376,13 +1376,14 @@
 </tbody></table>
 
 <!-- ============================================
-     BUTTON BAR - All Actions (Versions button completely removed)
+     BUTTON BAR - All Actions (with Auto-Save Folder button added)
      ============================================ -->
 <div class="button-box">
   <div>
-    <!-- Versions button DELETED as requested -->
+    <!-- NEW: Auto-Save Folder Selection Button -->
+    <button class="blue-button" onclick="selectFolder()" style="background-color: #9C27B0; color: white;" id="folderSelectBtn">📁 Select Folder for Auto-Save</button>
 
-    <div class="dropdown">
+    <div class="dropdown" id="importButtonContainer">
       <div class="dropdown" id="importButtonContainer">
         <button class="dropdown-button import-button-color">📥 Import (Names or Grades)</button>
         <div class="dropdown-options">
@@ -1469,7 +1470,7 @@
 
 <div id="noNamesMessage" style="display: none;">No Students Found in this Section</div>
 
-<!-- Statistics Analysis Modal -->
+<!-- Statistics Analysis Modal (with grade distribution graph built in) -->
 <div id="statsModal" class="stats-modal">
   <div class="stats-modal-content">
     <span class="close-modal">&times;</span>
@@ -1523,22 +1524,41 @@
       </tr>
     </table>
     
-    <!-- Grade Distribution Table -->
+    <!-- Grade Distribution Table (as in image) -->
     <table class="stats-table">
       <tr>
-        <td colspan="5" class="stats-table-title">Grade Distribution</td>
+        <td colspan="5" class="stats-table-title">Grade Distribution (Number of students per range)</td>
       </tr>
       <tr>
-        <th>Grades (90-100%)</th>
-        <th>Grades (80-89%)</th>
-        <th>Grades (70-79%)</th>
-        <th>Grades (60-69%)</th>
-        <th>Grades (Below 60%)</th>
+        <th>1 - 19</th>
+        <th>20 - 39</th>
+        <th>40 - 59</th>
+        <th>60 - 79</th>
+        <th>80 - 100</th>
       </tr>
-      <tr id="gradeDistributionData">
-        <!-- Data will be populated by JavaScript -->
+      <tr id="gradeDistributionRangesData">
+        <!-- data -->
       </tr>
     </table>
+
+    <!-- Graph representation (as in image) -->
+    <div style="margin-top:25px; border:1px solid #000; padding:15px; background:#f9f9f9;">
+      <h3 style="text-align:center; margin-bottom:15px;">📊 GRADE DISTRIBUTION GRAPH</h3>
+      <div style="display:flex; align-items:flex-end; justify-content:space-around; height:200px; border-bottom:2px solid #333; padding:0 10px;">
+        <!-- bars will be injected by id -->
+        <div id="graphBar1" style="width:60px; background:#4CAF50; text-align:center; color:white; font-weight:bold;"></div>
+        <div id="graphBar2" style="width:60px; background:#FFC107; text-align:center; color:white; font-weight:bold;"></div>
+        <div id="graphBar3" style="width:60px; background:#FF9800; text-align:center; color:white; font-weight:bold;"></div>
+        <div id="graphBar4" style="width:60px; background:#2196F3; text-align:center; color:white; font-weight:bold;"></div>
+        <div id="graphBar5" style="width:60px; background:#9C27B0; text-align:center; color:white; font-weight:bold;"></div>
+      </div>
+      <div style="display:flex; justify-content:space-around; margin-top:10px; font-weight:bold;">
+        <span>1‑19</span><span>20‑39</span><span>40‑59</span><span>60‑79</span><span>80‑100</span>
+      </div>
+      <div style="margin-top:15px; text-align:center; font-style:italic;">
+        <span style="display:inline-block; width:15px; height:15px; background:#4CAF50;"></span> ZERO / FA not shown (handled separately)
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1553,8 +1573,8 @@
             <li>📈 Final Grades Sheet</li>
         </ul>
         <p>Each sheet will print on a separate page with logo and headers.</p>
-        <button id="print-confirm">Yes, Print All</button>
-        <button id="print-cancel">Cancel</button>
+        <button id="print-confirm" onclick="confirmPrintAllSheets()">Yes, Print All</button>
+        <button id="print-cancel" onclick="document.getElementById('printAllSheetsModal').style.display='none'">Cancel</button>
     </div>
 </div>
 
@@ -1567,12 +1587,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
 <!-- ============================================
-     APPLICATION LOGIC (original, with fixes and updates)
+     APPLICATION LOGIC (original, with fixes and updates) + Auto-Save Folder Integration
      ============================================ -->
 <script>
 // ============================================
 // CLFS GRADE MANAGEMENT SYSTEM (GMS)
 // Original Code - with fixes: PDF imports all names, JSON imports both names & grades, update URL updated, version system removed.
+// MERGED with Login.html defaultUsers and authentication logic
+// INCLUDES: Enhanced Statistics with Grade Distribution Graph, fixed semester, preloaded students
+// ADDED: Auto-save to folder functionality (integrated from the simpler GMS)
 // ============================================
 
 // PDF Worker Configuration
@@ -1600,6 +1623,409 @@ const performanceAnalysisButton = document.getElementById('performanceAnalysisBu
 const resultsAnalysisButton = document.getElementById('resultsAnalysisButton');
 
 // ============================================
+// AUTO-SAVE FOLDER FUNCTIONALITY (integrated)
+// ============================================
+let folderHandle;
+
+// ==============================
+// Select folder for auto-save
+// ==============================
+async function selectFolder() {
+  try {
+    folderHandle = await window.showDirectoryPicker();
+    localStorage.setItem('gmsFolderSelected', 'yes');
+    localStorage.setItem('gmsFolderHandle', JSON.stringify({ 
+      // We can't store the actual handle, just a flag
+      selected: true,
+      timestamp: new Date().toISOString()
+    }));
+    
+    // Update button appearance
+    const folderBtn = document.getElementById('folderSelectBtn');
+    if (folderBtn) {
+      folderBtn.style.backgroundColor = '#4CAF50';
+      folderBtn.innerHTML = '✅ Folder Selected';
+      setTimeout(() => {
+        folderBtn.style.backgroundColor = '#9C27B0';
+        folderBtn.innerHTML = '📁 Change Auto-Save Folder';
+      }, 3000);
+    }
+    
+    alert("Folder selected! Auto-save will now work in this folder.");
+    
+    // Trigger an initial save to the folder
+    setTimeout(() => {
+      const data = tableToJSON();
+      saveGrades(data);
+    }, 1000);
+  } catch (err) {
+    console.error('Folder selection cancelled or failed:', err);
+  }
+}
+
+// ==============================
+// Helper: Convert table to JSON
+// ==============================
+function tableToJSON() {
+  const table = document.getElementById('studentTable');
+  if (!table) return [];
+  
+  const tbody = table.tBodies[0];
+  if (!tbody) return [];
+  
+  const data = [];
+  for (let row of tbody.rows) {
+    if (!row.cells || row.cells.length < 3) continue;
+    
+    const sNo = row.cells[0]?.innerText || '';
+    const name = row.cells[2]?.innerText || '';
+    const id = row.cells[1]?.innerText || '';
+    
+    const studentData = {
+      sNo: sNo,
+      id: id,
+      name: name,
+      grades: {}
+    };
+    
+    // Capture all grade columns based on current view
+    if (currentView === 'raw') {
+      studentData.grades = {
+        participation: row.cells[3]?.innerText || '',
+        ePortfolio: row.cells[4]?.innerText || '',
+        presentation: row.cells[5]?.innerText || '',
+        popQuiz1: row.cells[6]?.innerText || '',
+        popQuiz2: row.cells[7]?.innerText || '',
+        test1GV: row.cells[8]?.innerText || '',
+        test2LR: row.cells[9]?.innerText || '',
+        speakingTest: row.cells[10]?.innerText || '',
+        writingTest: row.cells[11]?.innerText || '',
+        writingPortfolio: row.cells[12]?.innerText || '',
+        midterm: row.cells[13]?.innerText || '',
+        final: row.cells[14]?.innerText || ''
+      };
+    } else if (currentView === 'summative') {
+      studentData.grades = {
+        partEport: row.cells[3]?.innerText || '',
+        presentation: row.cells[4]?.innerText || '',
+        popQuiz1: row.cells[5]?.innerText || '',
+        popQuiz2: row.cells[6]?.innerText || '',
+        test1GV: row.cells[7]?.innerText || '',
+        test2LR: row.cells[8]?.innerText || '',
+        speakingTest: row.cells[9]?.innerText || '',
+        writingTest: row.cells[10]?.innerText || '',
+        writingPortfolio: row.cells[11]?.innerText || '',
+        midterm: row.cells[12]?.innerText || '',
+        final: row.cells[13]?.innerText || ''
+      };
+    } else if (currentView === 'final') {
+      studentData.grades = {
+        partEport: row.cells[3]?.innerText || '',
+        tests: row.cells[4]?.innerText || '',
+        presentation: row.cells[5]?.innerText || '',
+        midterm: row.cells[6]?.innerText || '',
+        final: row.cells[7]?.innerText || '',
+        total: row.cells[8]?.innerText || '',
+        result: row.cells[9]?.innerText || '',
+        gradeLetter: row.cells[10]?.innerText || ''
+      };
+    }
+    
+    data.push(studentData);
+  }
+  
+  // Add metadata
+  const metadata = {
+    course: courseSelect.value,
+    courseName: courseSelect.options[courseSelect.selectedIndex]?.text || '',
+    section: sectionSelect.value,
+    semester: semesterSelect.value,
+    instructor: instructorNameElem?.textContent || '',
+    view: currentView,
+    exportDate: new Date().toISOString()
+  };
+  
+  return {
+    metadata: metadata,
+    students: data
+  };
+}
+
+// ==============================
+// Auto-save to JSON file in selected folder
+// ==============================
+async function saveGrades(data) {
+  if (!folderHandle) {
+    // Try to restore folder selection from localStorage flag
+    if (localStorage.getItem('gmsFolderSelected') === 'yes') {
+      // We need to re-prompt as we can't restore the handle
+      folderHandle = await window.showDirectoryPicker();
+      if (!folderHandle) return;
+    } else {
+      // Silent fail - don't alert, just return
+      return;
+    }
+  }
+  
+  try {
+    // Generate filename with timestamp and context
+    const timestamp = new Date();
+    const dateStr = timestamp.toISOString().split('T')[0];
+    const timeStr = timestamp.toTimeString().split(' ')[0].replace(/:/g, '-');
+    const courseCode = courseSelect.value;
+    const section = sectionSelect.value;
+    const view = currentView;
+    
+    const fileName = `GMS_${courseCode}_Sec${section}_${view}_${dateStr}_${timeStr}.json`;
+    
+    const fileHandle = await folderHandle.getFileHandle(fileName, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(JSON.stringify(data, null, 2));
+    await writable.close();
+    
+    // Show subtle success indicator
+    const folderBtn = document.getElementById('folderSelectBtn');
+    if (folderBtn) {
+      folderBtn.style.backgroundColor = '#4CAF50';
+      folderBtn.innerHTML = '✓ Auto-Saved';
+      setTimeout(() => {
+        folderBtn.style.backgroundColor = '#9C27B0';
+        folderBtn.innerHTML = '📁 Auto-Save Folder';
+      }, 2000);
+    }
+    
+    console.log(`Auto-saved to folder: ${fileName}`);
+  } catch (err) {
+    console.error('Auto-save failed:', err);
+    // Show error on button
+    const folderBtn = document.getElementById('folderSelectBtn');
+    if (folderBtn) {
+      folderBtn.style.backgroundColor = '#e74c3c';
+      folderBtn.innerHTML = '✗ Save Failed';
+      setTimeout(() => {
+        folderBtn.style.backgroundColor = '#9C27B0';
+        folderBtn.innerHTML = '📁 Auto-Save Folder';
+      }, 3000);
+    }
+  }
+}
+
+// ==============================
+// Save button clicked - triggers auto-save
+// ==============================
+function saveButtonClicked() {
+  const data = tableToJSON();
+  saveGrades(data);
+}
+
+// ==============================
+// Load from folder - manual import from selected folder
+// ==============================
+async function loadFromFolder() {
+  try {
+    const [fileHandle] = await window.showOpenFilePicker({
+      types: [{ 
+        description: "JSON Files", 
+        accept: { "application/json": [".json"] } 
+      }],
+      multiple: false
+    });
+    
+    const file = await fileHandle.getFile();
+    const text = await file.text();
+    const data = JSON.parse(text);
+    
+    // Load data into table
+    if (data.students && Array.isArray(data.students)) {
+      // Clear existing table
+      tbody.innerHTML = '';
+      
+      // Create rows from imported data
+      data.students.forEach((student, index) => {
+        const tr = document.createElement('tr');
+        
+        if (data.metadata && data.metadata.view === 'raw' || !data.metadata) {
+          // Default to raw view format
+          tr.innerHTML = `
+            <td>${index + 1}</td>
+            <td contenteditable="false">${student.id || ''}</td>
+            <td contenteditable="false" style="text-align:left;">${student.name || ''}</td>
+            <td contenteditable="true">${student.grades?.participation || ''}</td>
+            <td contenteditable="true">${student.grades?.ePortfolio || ''}</td>
+            <td contenteditable="true">${student.grades?.presentation || ''}</td>
+            <td contenteditable="true">${student.grades?.popQuiz1 || ''}</td>
+            <td contenteditable="true">${student.grades?.popQuiz2 || ''}</td>
+            <td contenteditable="true">${student.grades?.test1GV || ''}</td>
+            <td contenteditable="true">${student.grades?.test2LR || ''}</td>
+            <td contenteditable="true">${student.grades?.speakingTest || ''}</td>
+            <td contenteditable="true">${student.grades?.writingTest || ''}</td>
+            <td contenteditable="true">${student.grades?.writingPortfolio || ''}</td>
+            <td contenteditable="true">${student.grades?.midterm || ''}</td>
+            <td contenteditable="true">${student.grades?.final || ''}</td>
+            <td></td>
+          `;
+        } else if (data.metadata.view === 'final') {
+          tr.innerHTML = `
+            <td>${index + 1}</td>
+            <td contenteditable="false">${student.id || ''}</td>
+            <td contenteditable="false" style="text-align:left;">${student.name || ''}</td>
+            <td contenteditable="false">${student.grades?.partEport || ''}</td>
+            <td contenteditable="false">${student.grades?.tests || ''}</td>
+            <td contenteditable="false">${student.grades?.presentation || ''}</td>
+            <td contenteditable="false">${student.grades?.midterm || ''}</td>
+            <td contenteditable="false">${student.grades?.final || ''}</td>
+            <td class="${parseFloat(student.grades?.total) >= 59.5 ? 'total-pass' : 'total-fail'}">${student.grades?.total || ''}</td>
+            <td contenteditable="false" class="${student.grades?.result === 'Pass' ? 'finally-pass' : student.grades?.result === 'Not Pass' ? 'finally-fail' : ''}">${student.grades?.result || ''}</td>
+            <td contenteditable="false" class="${student.grades?.gradeLetter === 'F' ? 'red-text' : 'green-text'}">${student.grades?.gradeLetter || ''}</td>
+          `;
+        }
+        
+        tbody.appendChild(tr);
+      });
+      
+      // Switch to appropriate view if metadata exists
+      if (data.metadata && data.metadata.view) {
+        switchView(data.metadata.view);
+      }
+      
+      // Update course/section if provided
+      if (data.metadata) {
+        if (data.metadata.course) {
+          courseSelect.value = data.metadata.course;
+          courseCode.value = data.metadata.course;
+        }
+        if (data.metadata.section) {
+          // Ensure section exists
+          let sectionExists = false;
+          for (let opt of sectionSelect.options) {
+            if (opt.value === data.metadata.section) {
+              sectionExists = true;
+              break;
+            }
+          }
+          if (!sectionExists) {
+            const opt = document.createElement('option');
+            opt.value = data.metadata.section;
+            opt.textContent = data.metadata.section;
+            sectionSelect.appendChild(opt);
+          }
+          sectionSelect.value = data.metadata.section;
+        }
+      }
+      
+      noNamesMessage.style.display = 'none';
+      calculateTotals();
+      showStatus('✅ Data loaded from folder successfully!', document.getElementById('folderSelectBtn'));
+    }
+  } catch (err) {
+    console.error('Error loading from folder:', err);
+    showStatus('❌ Failed to load from folder', document.getElementById('folderSelectBtn'));
+  }
+}
+
+// ============================================
+// LOGIN / USER MANAGEMENT (merged from Login.html)
+// ============================================
+let users = {};
+const defaultUsers = {
+  "admin": {
+    "password": "adm25",
+    "role": "admin",
+    "approved": true,
+    "fullName": "Administrator"
+  },
+  "E0098": {
+    "password": "e98",
+    "role": "instructor",
+    "approved": true,
+    "subject": "Mathematics",
+    "fullName": "Dr. Hameed Ur Rehman Khan"
+  },
+  "E0795": {
+    "password": "e795",
+    "role": "instructor",
+    "approved": true,
+    "subject": "Information Technology",
+    "fullName": "Dr. Mujahid Al Zakwani"
+  },
+  "E0788": {
+    "password": "e788",
+    "role": "instructor",
+    "approved": true,
+    "subject": "English",
+    "fullName": "Mr. Aris Dahan"
+  },
+  "E0535": {
+    "password": "e535",
+    "role": "instructor",
+    "approved": true,
+    "subject": "Mathematics",
+    "fullName": "Mr. Badar Al Balsuhi"
+  },
+  "E0555": {
+    "password": "e555",
+    "role": "instructor",
+    "approved": true,
+    "subject": "English",
+    "fullName": "Ashraft Tantish"
+  },
+  "E0493": {
+    "password": "e493",
+    "role": "instructor",
+    "approved": true,
+    "subject": "Mathematics",
+    "fullName": "Mr. Ibrahim Al Barwani"
+  },
+  "E05899": {
+    "fullName": "Ms. Waad Al Kiyumi",
+    "password": "e5899",
+    "subject": "Mathematics",
+    "approved": true,
+    "role": "instructor"
+  },
+  "E0545": {
+    "fullName": "Mr. Khalfan Al Mamari",
+    "password": "e545",
+    "subject": "Mathematics",
+    "approved": true,
+    "role": "instructor"
+  },
+  "E0590": {
+    "fullName": "Mr. Nasser Al Dhawi",
+    "password": "e590",
+    "subject": "Information Technology",
+    "approved": true,
+    "role": "instructor"
+  }
+};
+
+function loadUsers() {
+  const stored = localStorage.getItem("clfs_users");
+  users = stored ? JSON.parse(stored) : defaultUsers;
+}
+function saveUsers() { localStorage.setItem("clfs_users", JSON.stringify(users)); }
+
+let currentUser = null;
+
+// We'll call login check on page load; if no user, redirect to login page.
+function checkAuth() {
+  const savedUser = localStorage.getItem('currentUser');
+  if (savedUser) {
+    currentUser = JSON.parse(savedUser);
+    instructorNameElem.textContent = currentUser.fullName;
+  } else {
+    // Not logged in, redirect to login page
+    window.location.href = "Login.html";
+  }
+}
+
+function logout() {
+  localStorage.removeItem('currentUser');
+  localStorage.removeItem('rememberedCredentials');
+  window.location.href = "Login.html";
+}
+
+// ============================================
 // APPLICATION STATE
 // ============================================
 let isLocked = false;
@@ -1621,6 +2047,63 @@ const finalMarksLimits = {
 
 let currentMarksLimits = rawMarksLimits;
 let allCoursesData = JSON.parse(localStorage.getItem('SGS_All_Courses') || '{}');
+
+// ============================================
+// FIXED: Preload student data from the PDF screenshot (6 students)
+// ============================================
+const preloadedStudents = [
+  { id: "2525624", name: "Al Anood Ashraf Said Al-Hajri" },
+  { id: "2525842", name: "Albara Talal 'Abdullah Hamed Al'Obeidani" },
+  { id: "2525989", name: "Ali Mohammed Ali Al-Badwawi" },
+  { id: "2525634", name: "Majdah Said Sultan Saayid Al-" },
+  { id: "2525385", name: "Maymoona Said Sulaiyim Abdullah Al-Shukaili" },
+  { id: "2525671", name: "Noor Ahmed Hamood" }
+];
+
+function initializePreloadedData() {
+  const currentSemester = getCurrentSemester();
+  // Set to FPAD004 section 4 as per the original PDF context
+  const course = 'FPAD004';
+  const section = '04';
+  const key = `SGS_${currentSemester.semester}_${course}_Sec${section}`;
+  
+  if (!allCoursesData[key]) {
+    const students = preloadedStudents.map(s => {
+      const arr = Array(23).fill('');
+      arr[1] = s.id;
+      arr[2] = s.name;
+      return arr;
+    });
+    
+    allCoursesData[key] = {
+      students: students,
+      formData: {
+        semester: currentSemester.semester,
+        course: course,
+        section: section
+      },
+      isLocked: false,
+      timestamp: new Date().toISOString()
+    };
+    localStorage.setItem('SGS_All_Courses', JSON.stringify(allCoursesData));
+  }
+  
+  // Set dropdowns to match preloaded data
+  courseSelect.value = course;
+  courseCode.value = course;
+  // Ensure section exists in dropdown
+  let sectionExists = false;
+  for (let opt of sectionSelect.options) {
+    if (opt.value === section) { sectionExists = true; break; }
+  }
+  if (!sectionExists) {
+    const opt = document.createElement('option');
+    opt.value = section;
+    opt.textContent = section;
+    sectionSelect.appendChild(opt);
+  }
+  sectionSelect.value = section;
+}
 
 // ============================================
 // UTILITY FUNCTIONS (unchanged except where noted)
@@ -2098,12 +2581,16 @@ function saveToLocalStorage() {
       section: sectionSelect.value
     }));
 
-    // Versioned save removed
-
     updateCourseDropdown();
     updateSectionDropdown();
 
     showStatus('✅ Data saved successfully!', document.querySelector('.green-button'));
+    
+    // Also trigger auto-save to folder if folder is selected
+    if (folderHandle || localStorage.getItem('gmsFolderSelected') === 'yes') {
+      const data = tableToJSON();
+      saveGrades(data);
+    }
   } catch (err) {
     console.error(err);
     showStatus('❌ Failed to save data', document.querySelector('.green-button'));
@@ -2257,7 +2744,7 @@ async function parseExcel(file) {
 
   const students = [];
   let idColumn = -1;
-  let nameColumn = -1; // Combined name column
+  let nameColumn = -1;
   let firstNameColumn = -1;
   let lastNameColumn = -1;
 
@@ -2457,7 +2944,7 @@ async function parsePDF(file) {
       fullText += item.str + ' ';
     }
     
-    // Improved regex to capture ALL names, not just a few
+    // FIXED: Improved regex to capture ALL names from the PDF (column 3 under header "Name")
     // Looks for 6+ digit ID followed by name, and stops before major/class rank
     const studentPattern = /(\d{6,})\s+([A-Za-z\s'\-\.]+?)(?:\s+(?:[A-Za-z]+(?:\s+[A-Za-z]+)*)\s+\d+|$)/g;
     let match;
@@ -3448,10 +3935,6 @@ function clearStudents() {
   showStatus('✅ All data cleared!', document.querySelector('.clear-button'));
 }
 
-function logout() {
-  window.location.href = "Login.html";
-}
-
 function switchView(viewType) {
   currentView = viewType;
 
@@ -3995,6 +4478,13 @@ No manual clicking required!`;
 }
 
 function printAllSheets() {
+  // Show modal first
+  document.getElementById('printAllSheetsModal').style.display = 'block';
+}
+
+function confirmPrintAllSheets() {
+  document.getElementById('printAllSheetsModal').style.display = 'none';
+  
   // Store current view to restore later
   const originalView = currentView;
   
@@ -4188,6 +4678,33 @@ function printAllSheets() {
         .page-break {
           page-break-after: always;
         }
+        .stats-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 15px 0;
+        }
+        .stats-table th, .stats-table td {
+          border: 1px solid #000;
+          padding: 8px;
+          text-align: center;
+        }
+        .stats-table th {
+          background: #F8F8F8;
+        }
+        .graph-container {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-around;
+          height: 200px;
+          border-bottom: 2px solid #333;
+          margin-top: 20px;
+        }
+        .graph-bar {
+          width: 60px;
+          text-align: center;
+          color: white;
+          font-weight: bold;
+        }
       </style>
     </head>
     <body>
@@ -4295,6 +4812,56 @@ function printAllSheets() {
   // Generate Final Grades Sheet
   printContent += getHeaderHTML('Final Grades Sheet');
   printContent += getViewTable('final');
+  printContent += '<div class="page-break"></div>';
+
+  // Generate Statistical Analysis page (with current stats)
+  const currentKey = getStorageKey();
+  const savedData = allCoursesData[currentKey];
+  if (savedData && savedData.students.length > 0) {
+    const stats = calculateStatisticsFromFinalGrades(savedData.students);
+    printContent += getHeaderHTML('Statistical Analysis');
+    printContent += `
+      <table class="stats-table">
+        <tr><th colspan="11">Numerical Analysis</th></tr>
+        <tr>
+          <th>Students</th><th>Highest</th><th>Average</th><th>Lowest</th>
+          <th>Pass (%)</th><th>Not Pass (%)</th><th>R (%)</th><th>FA (%)</th><th>WA (%)</th><th>IP (%)</th><th>Others (%)</th>
+        </tr>
+        <tr>
+          <td>${stats.totalStudents}</td><td>${stats.highestScore}</td><td>${stats.averageScore}</td><td>${stats.lowestScore}</td>
+          <td>${stats.passCount} (${stats.passPercentage}%)</td><td>${stats.notPassCount} (${stats.notPassPercentage}%)</td>
+          <td>${stats.repeatersCount} (${stats.repeatersPercentage}%)</td><td>${stats.faCount} (${stats.faPercentage}%)</td>
+          <td>${stats.waCount} (${stats.waPercentage}%)</td><td>${stats.ipCount} (${stats.ipPercentage}%)</td>
+          <td>${stats.othersCount} (${stats.othersPercentage}%)</td>
+        </tr>
+      </table>
+      <table class="stats-table">
+        <tr><th colspan="13">Grade Letters Distribution</th></tr>
+        <tr>
+          <th>A+</th><th>A</th><th>A-</th><th>B+</th><th>B</th><th>B-</th><th>C+</th><th>C</th><th>C-</th><th>D+</th><th>D</th><th>D-</th><th>F</th>
+        </tr>
+        <tr>
+          <td>${stats.gradeDistribution.aPlus}</td><td>${stats.gradeDistribution.a}</td><td>${stats.gradeDistribution.aMinus}</td>
+          <td>${stats.gradeDistribution.bPlus}</td><td>${stats.gradeDistribution.b}</td><td>${stats.gradeDistribution.bMinus}</td>
+          <td>${stats.gradeDistribution.cPlus}</td><td>${stats.gradeDistribution.c}</td><td>${stats.gradeDistribution.cMinus}</td>
+          <td>${stats.gradeDistribution.dPlus}</td><td>${stats.gradeDistribution.d}</td><td>${stats.gradeDistribution.dMinus}</td><td>${stats.gradeDistribution.f}</td>
+        </tr>
+      </table>
+      <table class="stats-table">
+        <tr><th colspan="5">Grade Distribution (Ranges)</th></tr>
+        <tr><th>1-19</th><th>20-39</th><th>40-59</th><th>60-79</th><th>80-100</th></tr>
+        <tr><td>${stats.rangeCounts[0]}</td><td>${stats.rangeCounts[1]}</td><td>${stats.rangeCounts[2]}</td><td>${stats.rangeCounts[3]}</td><td>${stats.rangeCounts[4]}</td></tr>
+      </table>
+      <h3 style="text-align:center;">📊 GRADE DISTRIBUTION GRAPH</h3>
+      <div class="graph-container">`;
+    const maxCount = Math.max(...stats.rangeCounts, 1);
+    const colors = ['#4CAF50','#FFC107','#FF9800','#2196F3','#9C27B0'];
+    stats.rangeCounts.forEach((val, i) => {
+      const height = (val / maxCount) * 150;
+      printContent += `<div class="graph-bar" style="background:${colors[i]}; height:${height}px; line-height:${height}px;">${val}</div>`;
+    });
+    printContent += `</div><div style="display:flex; justify-content:space-around; margin-top:10px;"><span>1-19</span><span>20-39</span><span>40-59</span><span>60-79</span><span>80-100</span></div>`;
+  }
 
   printContent += `
     </body>
@@ -4483,7 +5050,7 @@ function initUpdateSystem() {
 }
 
 // ============================================
-// STATISTICS ANALYSIS (with Repeaters column)
+// STATISTICS ANALYSIS (with Repeaters column & Grade Distribution Graph)
 // ============================================
 
 function showResultsAnalysis() {
@@ -4510,7 +5077,7 @@ function calculateStatisticsFromFinalGrades(students) {
   
   let passCount = 0;
   let notPassCount = 0;
-  let repeatersCount = 0;  // new: R count
+  let repeatersCount = 0;
   let faCount = 0;
   let waCount = 0;
   let ipCount = 0;
@@ -4521,13 +5088,8 @@ function calculateStatisticsFromFinalGrades(students) {
     cPlus: 0, c: 0, cMinus: 0, dPlus: 0, d: 0, dMinus: 0, f: 0
   };
 
-  const percentageDistribution = {
-    ninetyToHundred: 0, 
-    eightyToEightyNine: 0, 
-    seventyToSeventyNine: 0, 
-    sixtyToSixtyNine: 0, 
-    belowSixty: 0
-  };
+  // Range counts: [1-19, 20-39, 40-59, 60-79, 80-100]
+  const rangeCounts = [0,0,0,0,0];
   
   let hasValidData = false;
   
@@ -4551,6 +5113,13 @@ function calculateStatisticsFromFinalGrades(students) {
       if (totalScore > highestScore) highestScore = totalScore;
       if (lowestScore === 0 || totalScore < lowestScore) lowestScore = totalScore;
       totalScoreSum += totalScore;
+      
+      // grade range distribution based on totalScore (0-100 scale)
+      if (totalScore <= 19) rangeCounts[0]++;
+      else if (totalScore <= 39) rangeCounts[1]++;
+      else if (totalScore <= 59) rangeCounts[2]++;
+      else if (totalScore <= 79) rangeCounts[3]++;
+      else if (totalScore <= 100) rangeCounts[4]++;
     }
     
     switch (finallyValue) {
@@ -4576,12 +5145,6 @@ function calculateStatisticsFromFinalGrades(students) {
       else if (gradeLetter === 'D') gradeDistribution.d++;
       else if (gradeLetter === 'D-') gradeDistribution.dMinus++;
       else if (gradeLetter === 'F') gradeDistribution.f++;
-      
-      if (totalScore >= 90) percentageDistribution.ninetyToHundred++;
-      else if (totalScore >= 80) percentageDistribution.eightyToEightyNine++;
-      else if (totalScore >= 70) percentageDistribution.seventyToSeventyNine++;
-      else if (totalScore >= 59.5) percentageDistribution.sixtyToSixtyNine++;
-      else if (totalScore > 0) percentageDistribution.belowSixty++;
     }
   });
   
@@ -4613,7 +5176,7 @@ function calculateStatisticsFromFinalGrades(students) {
     othersCount,
     othersPercentage: ((othersCount / validStudents) * 100).toFixed(1),
     gradeDistribution,
-    percentageDistribution
+    rangeCounts  // [1-19,20-39,40-59,60-79,80-100]
   };
 }
 
@@ -4625,7 +5188,7 @@ function updateStatsModal(stats) {
     <td>${stats.lowestScore}</td>
     <td>${stats.passCount} ( ${stats.passPercentage}% )</td>
     <td>${stats.notPassCount} ( ${stats.notPassPercentage}% )</td>
-    <td>${stats.repeatersCount} ( ${stats.repeatersPercentage}% )</td> <!-- new: R -->
+    <td>${stats.repeatersCount} ( ${stats.repeatersPercentage}% )</td>
     <td>${stats.faCount} ( ${stats.faPercentage}% )</td>
     <td>${stats.waCount} ( ${stats.waPercentage}% )</td>
     <td>${stats.ipCount} ( ${stats.ipPercentage}% )</td>
@@ -4650,14 +5213,28 @@ function updateStatsModal(stats) {
   `;
   document.getElementById('gradeLettersDistributionData').innerHTML = gradeLettersRow;
   
-  const gradeDistributionRow = `
-    <td>${stats.percentageDistribution.ninetyToHundred}</td>
-    <td>${stats.percentageDistribution.eightyToEightyNine}</td>
-    <td>${stats.percentageDistribution.seventyToSeventyNine}</td>
-    <td>${stats.percentageDistribution.sixtyToSixtyNine}</td>
-    <td>${stats.percentageDistribution.belowSixty}</td>
+  // range distribution (five columns)
+  const rangeRow = `
+    <td>${stats.rangeCounts[0]}</td>
+    <td>${stats.rangeCounts[1]}</td>
+    <td>${stats.rangeCounts[2]}</td>
+    <td>${stats.rangeCounts[3]}</td>
+    <td>${stats.rangeCounts[4]}</td>
   `;
-  document.getElementById('gradeDistributionData').innerHTML = gradeDistributionRow;
+  document.getElementById('gradeDistributionRangesData').innerHTML = rangeRow;
+
+  // Graph bars - scale to max count
+  const maxCount = Math.max(...stats.rangeCounts, 1);
+  const barHeights = stats.rangeCounts.map(c => (c / maxCount) * 150); // max height 150px
+  const barIds = ['graphBar1','graphBar2','graphBar3','graphBar4','graphBar5'];
+  barIds.forEach((id, idx) => {
+    const bar = document.getElementById(id);
+    if (bar) {
+      bar.style.height = (barHeights[idx] || 0) + 'px';
+      bar.textContent = stats.rangeCounts[idx] || 0;
+      bar.style.lineHeight = barHeights[idx] + 'px';
+    }
+  });
 }
 
 function getPerformanceAnalysis(student) {
@@ -4802,23 +5379,43 @@ function getPerformanceAnalysis(student) {
 document.getElementById('xlsxFileInput').addEventListener('change', handleGradesFile);
 
 // ============================================
+// AUTO-SAVE FOLDER INTEGRATION - Add button to load from folder
+// ============================================
+function addFolderLoadButton() {
+  const folderBtn = document.getElementById('folderSelectBtn');
+  if (folderBtn) {
+    // Add right-click context menu to load from folder
+    folderBtn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      loadFromFolder();
+    });
+    
+    // Add tooltip
+    folderBtn.title = "Left-click: Select folder for auto-save\nRight-click: Load grades from folder";
+  }
+}
+
+// ============================================
 // ORIGINAL INITIALIZATION - with version system removed
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
   // Versioned saves removed
   
-  // ORIGINAL CODE
-  const urlParams = new URLSearchParams(window.location.search);
+  // AUTH CHECK (merged)
+  loadUsers();
   const savedUser = localStorage.getItem('currentUser');
-  let instructorName;
-  if (savedUser) {
-    const user = JSON.parse(savedUser);
-    instructorName = user.fullName;
-  } else {
-    instructorName = urlParams.get('instructor') || 'Administrator';
+  if (!savedUser) {
+    window.location.href = "Login.html";
+    return;
   }
-  document.getElementById('instructorName').textContent = instructorName;
+  currentUser = JSON.parse(savedUser);
+  instructorNameElem.textContent = currentUser.fullName;
+
   updateSemesterDisplay();
+  
+  // Initialize with preloaded student data
+  initializePreloadedData();
+  
   initializeFromStorage();
 
   courseSelect.addEventListener('change', () => {
@@ -4872,6 +5469,9 @@ window.addEventListener('beforeunload', (e) => {
       return e.returnValue;
     } 
   });
+  
+  // Initialize folder load button
+  addFolderLoadButton();
 });
 
 // Run initUpdateSystem at the end
@@ -4890,6 +5490,8 @@ window.forceCheckForUpdates = function() {
 <a href="https://www.asu.edu.om/Page/Details/25?t=Centre%20for%20Language%20and%20Foundation%20Studies"> 
 Center For Language and Foundation Studies
 </a>. Copyright <span class="copyright">&copy; <a href="mailto:h.rehman@asu.edu.om">drkhan</a> <span id="year"></span></span>.
+<!-- HRK Logo added near copyright with hover zoom -->
+<img src="hrk-logo.png" alt="HRK" class="hrk-logo" style="height:20px; width:auto; vertical-align:middle; margin-left:5px; cursor:zoom-in; transition:transform 0.2s;" onmouseover="this.style.transform='scale(2.5)'; this.style.zIndex='2000'; this.style.position='relative';" onmouseout="this.style.transform='scale(1)'; this.style.zIndex='auto';" onclick="this.style.transform='scale(3.5)'; setTimeout(()=> this.style.transform='scale(1)', 500);" onerror="this.style.display='none'">
 </footer>
 <script>
     document.getElementById("year").textContent = new Date().getFullYear();
